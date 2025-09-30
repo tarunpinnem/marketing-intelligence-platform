@@ -1,132 +1,60 @@
-# Enterprise Competiscan Architecture
-
-[![Microservices](https://img.shields.io/badge/Architecture-Microservices-orange.svg)](https://microservices.io)
-[![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://python.org)
-[![React](https://img.shields.io/badge/React-18.0-61dafb.svg)](https://reactjs.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.104-green.svg)](https://fastapi.tiangolo.com)
-[![Kafka](https://img.shields.io/badge/Apache-Kafka-black.svg)](https://kafka.apache.org)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-blue.svg)](https://postgresql.org)
-[![Elasticsearch](https://img.shields.io/badge/Elasticsearch-8.11-yellow.svg)](https://elastic.co)
-[![Redis](https://img.shields.io/badge/Redis-7-red.svg)](https://redis.io)
 
 
+# Competiscan Real-Time Marketing Intelligence Platform
 
+## 🎯 Overview
+**Competiscan** is a live competitive marketing intelligence platform that automatically ingests real marketing campaign data from News API, social media advertising APIs, and multiple data sources. It provides real-time analytics, trend detection, and competitive insights through a modern React dashboard.
 
-# 🚀 **Competiscan Real-Time Intelligence Architecture: Technical Deep Dive**
+## 🚀 Core Features
 
-## **Neural Network Data Pipeline Architecture**
-
-### **Event-Driven Microservices Mesh**
-- **Kafka Event Streaming**: Distributed commit log with partitioned topics for horizontal scalability
-- **WebSocket Persistent Connections**: Full-duplex communication channels with automatic reconnection logic
-- **Docker Container Orchestration**: Immutable infrastructure with health check endpoints
-- **API Gateway Load Balancing**: Request routing with circuit breaker patterns
+### **Live Data Ingestion Pipeline**
+- **News API Integration**: Automatically fetches real marketing and advertising news using configurable search queries
+- **Multi-Source Data Pipeline**: Integrates Facebook Ad Library, Google Ads API, Twitter Ads, and LinkedIn Ads APIs
+- **Real-Time Processing**: Continuous data ingestion every 15 minutes with automatic deduplication
+- **Smart Content Detection**: AI-powered campaign detection from news articles and press releases
 
 ### **Advanced Analytics Engine**
-- **Natural Language Processing Pipeline**: Transformer-based sentiment analysis with TF-IDF keyword extraction
-- **Machine Learning Feature Engineering**: Real-time inference with cached embeddings
-- **Time-Series Aggregation**: Sliding window computations with configurable retention policies
-- **Competitive Intelligence Algorithms**: Market positioning matrices with threat assessment scoring
+- **Live Campaign Tracking**: Real-time monitoring of competitor marketing activities
+- **Trend Analysis**: Time-series analysis of campaign launch patterns and marketing spend
+- **Sentiment Analysis**: Automatic sentiment scoring of campaign coverage and reception
+- **Platform Detection**: Intelligent detection of marketing channels from content analysis
 
-## **Frontend Performance Optimization**
+### **Real-Time Dashboard**
+- **Live Updates**: WebSocket-powered real-time dashboard updates as new campaigns are detected
+- **Interactive Analytics**: Campaign trends, top performers, channel distribution charts
+- **Advanced Search**: Full-text search across campaign content, company names, and platforms
+- **Smart Filtering**: Filter by date ranges, sentiment scores, platforms, and campaign types
 
-### **React Rendering Optimization**
-- **Virtual DOM Reconciliation**: Memoized components with dependency tracking
-- **React Query Cache Invalidation**: Optimistic updates with background synchronization
-- **WebSocket State Management**: Event-driven state mutations with Redux-like patterns
-- **Component Lazy Loading**: Code splitting with dynamic imports
+## 🏗️ Technical Architecture
 
-### **Real-Time Data Synchronization**
-- **Server-Sent Events Fallback**: Progressive enhancement for WebSocket failures
-- **Client-Side Cache Hydration**: Immediate UI updates with eventual consistency
-- **Stale-While-Revalidate Strategy**: Background refresh with cached response serving
-- **Debounced API Calls**: Request batching to prevent API rate limiting
+### **Data Ingestion Services**
+```python
+# Real News API Integration
+news_ingestion.py    # Fetches live marketing news from NewsAPI.org
+data_ingestion.py    # Multi-platform ad API integration (Facebook, Google, Twitter)
+```
 
-## **Data Processing Pipeline**
+### **Backend Microservices** 
+- **FastAPI Gateway**: Central API routing with health checks and monitoring
+- **Analytics Service**: Real-time campaign analytics and competitor analysis 
+- **WebSocket Service**: Live dashboard updates and real-time notifications
+- **Data Pipeline**: Kafka-powered ETL with PostgreSQL, Elasticsearch, Redis
 
-### **ETL Stream Processing**
-- **Apache Kafka Streams**: Stateful stream transformations with exactly-once semantics
-- **Schema Registry Evolution**: Backward-compatible data serialization with Avro schemas
-- **Dead Letter Queues**: Failed message handling with exponential backoff retry logic
-- **Partitioned Consumer Groups**: Parallel processing with offset management
+### **Frontend Stack**
+- **React 18**: Modern component architecture with hooks and state management
+- **Real-Time UI**: WebSocket integration for live data updates
+- **Recharts**: Interactive campaign trend visualizations
+- **Tailwind CSS**: Responsive, modern UI design
 
-### **Analytics Computation Engine**
-- **In-Memory Aggregation**: Redis-backed counters with TTL expiration policies
-- **Batch Processing Jobs**: Scheduled analytics recalculation with checkpoint recovery
-- **Time-Window Computations**: Tumbling and hopping windows for trend analysis
-- **Cross-Reference Indexing**: Elasticsearch inverted indexes with relevance scoring
+## 🔧 Tech Stack
 
-## **Infrastructure & DevOps**
-
-### **Container Orchestration**
-- **Multi-Stage Docker Builds**: Optimized layer caching with distroless base images
-- **Service Mesh Architecture**: Inter-service communication with encryption in transit
-- **Health Check Probes**: Liveness and readiness endpoints with graceful degradation
-- **Horizontal Pod Autoscaling**: CPU/memory-based scaling with custom metrics
-
-### **Monitoring & Observability**
-- **Distributed Tracing**: Request correlation IDs across service boundaries
-- **Performance Metrics Collection**: Application-level telemetry with histogram distributions
-- **Error Aggregation**: Exception tracking with stack trace correlation
-- **Business Intelligence Dashboards**: Real-time KPI monitoring with alerting thresholds
-
-## **Database & Storage Layer**
-
-### **Polyglot Persistence Strategy**
-- **PostgreSQL ACID Transactions**: Referential integrity with optimistic locking
-- **Elasticsearch Full-Text Search**: Fuzzy matching with faceted navigation
-- **Redis In-Memory Caching**: Hash data structures with pipeline operations
-- **Time-Series Data Storage**: Compressed columnar storage with retention policies
-
-### **Data Consistency Patterns**
-- **Event Sourcing Architecture**: Immutable event logs with projection rebuilding
-- **CQRS Command-Query Separation**: Write-optimized commands with read-optimized queries
-- **Eventual Consistency Models**: Asynchronous replication with conflict resolution
-- **Distributed Locking**: Consensus algorithms for critical section synchronization
-
-## **Security & Compliance**
-
-### **API Security Framework**
-- **JWT Token Authentication**: Stateless session management with refresh token rotation
-- **Rate Limiting Middleware**: Token bucket algorithms with sliding window counters
-- **Input Validation Schemas**: Request sanitization with parameterized query prevention
-- **CORS Policy Configuration**: Origin whitelisting with preflight request handling
-
-### **Data Privacy & Protection**
-- **Encryption at Rest**: AES-256 disk encryption with key rotation policies
-- **Transport Layer Security**: TLS 1.3 certificate pinning with HSTS headers
-- **PII Data Masking**: Field-level encryption with tokenization strategies
-- **Audit Trail Logging**: Immutable access logs with digital signatures
-
-## **Performance Engineering**
-
-### **Latency Optimization**
-- **Content Delivery Networks**: Edge caching with geographic distribution
-- **Database Query Optimization**: Index tuning with execution plan analysis
-- **Connection Pooling**: Persistent connections with circuit breaker patterns
-- **Compression Algorithms**: Gzip/Brotli encoding with adaptive compression ratios
-
-### **Scalability Patterns**
-- **Stateless Service Design**: Horizontal scaling without session affinity
-- **Database Sharding**: Partition key distribution with consistent hashing
-- **Asynchronous Task Processing**: Message queue workers with backpressure handling
-- **Caching Strategies**: Multi-tier cache hierarchies with cache-aside patterns
-
-## **Machine Learning Operations**
-
-### **ML Pipeline Infrastructure**
-- **Feature Store Architecture**: Versioned feature engineering with lineage tracking
-- **Model Serving Endpoints**: A/B testing with canary deployments
-- **Training Pipeline Orchestration**: Workflow management with dependency graphs
-- **Model Monitoring**: Drift detection with performance degradation alerts
-
-### **Real-Time Inference**
-- **Streaming ML Predictions**: Low-latency model serving with batch optimization
-- **Feature Vector Caching**: Pre-computed embeddings with similarity search
-- **Online Learning Updates**: Incremental model training with concept drift adaptation
-- **Ensemble Model Aggregation**: Weighted voting with confidence interval scoring
-
-This architecture delivers **sub-second response times** with **99.9% availability** while processing **15,000+ events per second** through a **horizontally scalable microservices mesh** - exactly the kind of **enterprise-grade competitive intelligence platform** that Competiscan needs for real-time market analysis! 🚀## 🎯 **Features**
+| Layer | Technologies |
+|-------|-------------|
+| **Data Sources** | News API, Facebook Ad Library, Google Ads API, Twitter Ads |
+| **Data Pipeline** | Kafka Streams, Redis Caching, PostgreSQL, Elasticsearch |
+| **Backend** | FastAPI, SQLAlchemy, WebSockets, async/await |
+| **Frontend** | React 18, Recharts, React Query, Tailwind CSS |
+| **Infrastructure** | Docker Compose, Health Monitoring, Auto-scaling |## 🎯 **Features**
 
 ### **🚀 Real-Time Event Processing**
 - **Redis Streams**: Event-driven data pipeline
@@ -337,15 +265,6 @@ competiscan/
 - [ ] User authentication and multi-tenancy
 - [ ] Advanced data connectors (email, social media APIs)
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-
 
 ## 🙏 Acknowledgments
 
@@ -353,6 +272,5 @@ competiscan/
 - React and Tailwind CSS communities
 - Elasticsearch for powerful search capabilities
 
----
 
-**Made with ❤️ for competitive intelligence and marketing insights**
+
