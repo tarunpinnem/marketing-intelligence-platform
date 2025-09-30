@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Competiscan Live Streaming Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .event-flash {
+            animation: flash 0.5s ease-in-out;
+        }
+        
+        @keyframes flash {
+            0%, 100% { background-color: transparent; }
+            50% { background-color: #dbeafe; }
+        }
+        
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .connected { background-color: #10b981; }
+        .connecting { background-color: #f59e0b; }
+        .disconnected { background-color: #ef4444; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto p-6">
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div class="flex items-center justify-between">
+                <h1 class="text-3xl font-bold text-gray-900">
+                    🌊 Competiscan Live Streaming
+                </h1>
+                <div class="flex items-center space-x-4">
+                    <div id="connectionStatus" class="flex items-center">
+                        <span class="status-dot disconnected"></span>
+                        <span class="font-medium text-red-500">Disconnected</span>
+                    </div>
+                    <button onclick="connectWebSocket()" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                        🔗 Connect
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Live Statistics -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4">📊 Live Stats</h2>
+                <div id="liveStats" class="space-y-4">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-blue-600" id="totalCampaigns">0</div>
+                        <div class="text-sm text-gray-600">Total Campaigns</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-green-600" id="activeCampaigns">0</div>
+                        <div class="text-sm text-gray-600">Active Now</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-lg font-semibold text-purple-600" id="avgSentiment">0.00</div>
+                        <div class="text-sm text-gray-600">Avg Sentiment</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Events Feed -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4">⚡ Live Events</h2>
+                <div id="liveEvents" class="space-y-2 max-h-64 overflow-y-auto">
+                    <div class="text-gray-500 text-sm">No events yet...</div>
+                </div>
+            </div>
+
+            <!-- Recent Campaigns -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4">🎯 Recent Campaigns</h2>
+                <div id="recentCampaigns" class="space-y-3 max-h-64 overflow-y-auto">
+                    <div class="text-gray-500 text-sm">No campaigns yet...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Full Campaigns Table -->
+        <div class="bg-white rounded-lg shadow-md p-6 mt-6">
+            <h2 class="text-xl font-semibold mb-4">📋 All Campaigns</h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full table-auto">
+                    <thead>
+                        <tr class="bg-gray-50">
+                            <th class="px-4 py-2 text-left">Company</th>
+                            <th class="px-4 py-2 text-left">Campaign</th>
+                            <th class="px-4 py-2 text-left">Platform</th>
+                            <th class="px-4 py-2 text-left">Status</th>
+                            <th class="px-4 py-2 text-left">Impressions</th>
+                            <th class="px-4 py-2 text-left">CTR</th>
+                            <th class="px-4 py-2 text-left">Sentiment</th>
+                        </tr>
+                    </thead>
+                    <tbody id="campaignsTableBody">
+                        <tr>
+                            <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                                No campaigns loaded yet...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Event Log -->
+        <div class="bg-white rounded-lg shadow-md p-6 mt-6">
+            <h2 class="text-xl font-semibold mb-4">📜 Event Log</h2>
+            <div id="eventLog" class="bg-gray-50 p-4 rounded max-h-64 overflow-y-auto font-mono text-sm">
+                <div class="text-gray-500">Waiting for events...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let campaigns = [];
+        let eventCount = 0;
+        let stats = {
+            totalCampaigns: 0,
+            activeCampaigns: 0,
+            avgSentiment: 0.5
+        };
+
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                return;
+            }
+
+            ws = new WebSocket('ws://localhost:8765');
+            
+            ws.onopen = function() {
+                console.log('🔗 WebSocket connected');
+                updateConnectionStatus('connected', 'Connected');
+                logEvent('✅ WebSocket connected to streaming server');
+            };
+
+            ws.onmessage = function(event) {
+                try {
+                    const message = JSON.parse(event.data);
+                    handleWebSocketMessage(message);
+                } catch (error) {
+                    console.error('❌ Error parsing message:', error);
+                }
+            };
+
+            ws.onclose = function() {
+                console.log('❌ WebSocket disconnected');
+                updateConnectionStatus('disconnected', 'Disconnected');
+                logEvent('❌ WebSocket disconnected');
+                
+                // Auto-reconnect after 3 seconds
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = function(error) {
+                console.error('❌ WebSocket error:', error);
+                updateConnectionStatus('disconnected', 'Error');
+                logEvent('❌ WebSocket connection error');
+            };
+
+            updateConnectionStatus('connecting', 'Connecting...');
+        }
+
+        function updateConnectionStatus(status, text) {
+            const statusElement = document.getElementById('connectionStatus');
+            const dot = statusElement.querySelector('.status-dot');
+            const span = statusElement.querySelector('span:last-child');
+            
+            dot.className = `status-dot ${status}`;
+            span.textContent = text;
+            span.className = `font-medium ${
+                status === 'connected' ? 'text-green-500' :
+                status === 'connecting' ? 'text-yellow-500' : 
+                'text-red-500'
+            }`;
+        }
+
+        function handleWebSocketMessage(message) {
+            switch (message.type) {
+                case 'initial_data':
+                    campaigns = message.campaigns || [];
+                    stats = message.summary || stats;
+                    updateDashboard();
+                    logEvent(`📊 Initial data loaded: ${campaigns.length} campaigns`);
+                    break;
+
+                case 'campaign_update':
+                    handleCampaignUpdate(message);
+                    break;
+
+                case 'analytics_update':
+                    handleAnalyticsUpdate(message);
+                    break;
+
+                case 'pong':
+                    // Handle pong response
+                    break;
+
+                default:
+                    console.log('📨 Unknown message type:', message.type);
+            }
+        }
+
+        function handleCampaignUpdate(message) {
+            const campaign = message.data;
+            const eventType = message.event_type;
+            
+            // Update campaigns array
+            const existingIndex = campaigns.findIndex(c => c.id === campaign.id);
+            if (existingIndex >= 0) {
+                campaigns[existingIndex] = campaign;
+            } else {
+                campaigns.unshift(campaign);
+                campaigns = campaigns.slice(0, 50); // Keep latest 50
+                
+                if (eventType === 'created') {
+                    stats.totalCampaigns++;
+                    if (campaign.status === 'active') {
+                        stats.activeCampaigns++;
+                    }
+                }
+            }
+
+            // Add to live events
+            addLiveEvent({
+                type: eventType,
+                company: campaign.company,
+                name: campaign.name,
+                timestamp: new Date().toLocaleTimeString()
+            });
+
+            updateDashboard();
+            logEvent(`📧 ${eventType.toUpperCase()}: ${campaign.company} - ${campaign.name}`);
+        }
+
+        function handleAnalyticsUpdate(message) {
+            const data = message.data;
+            
+            addLiveEvent({
+                type: 'analytics',
+                company: data.company,
+                metric: `${data.metric_type}: ${data.value}`,
+                timestamp: new Date().toLocaleTimeString()
+            });
+
+            logEvent(`📈 ANALYTICS: ${data.company} - ${data.metric_type}: ${data.value}`);
+        }
+
+        function addLiveEvent(event) {
+            const eventsContainer = document.getElementById('liveEvents');
+            
+            const eventDiv = document.createElement('div');
+            eventDiv.className = 'border-l-4 border-blue-500 pl-3 py-2 bg-blue-50 event-flash';
+            eventDiv.innerHTML = `
+                <div class="font-medium text-sm">
+                    ${event.type.replace('_', ' ').toUpperCase()}
+                </div>
+                <div class="text-sm text-gray-600">
+                    ${event.company} ${event.metric ? '- ' + event.metric : ''}
+                </div>
+                <div class="text-xs text-gray-500">${event.timestamp}</div>
+            `;
+            
+            eventsContainer.insertBefore(eventDiv, eventsContainer.firstChild);
+            
+            // Remove old events (keep latest 10)
+            while (eventsContainer.children.length > 10) {
+                eventsContainer.removeChild(eventsContainer.lastChild);
+            }
+        }
+
+        function updateDashboard() {
+            // Update statistics
+            document.getElementById('totalCampaigns').textContent = stats.totalCampaigns;
+            document.getElementById('activeCampaigns').textContent = stats.activeCampaigns;
+            document.getElementById('avgSentiment').textContent = stats.avgSentiment.toFixed(2);
+
+            // Update recent campaigns
+            updateRecentCampaigns();
+            
+            // Update campaigns table
+            updateCampaignsTable();
+        }
+
+        function updateRecentCampaigns() {
+            const container = document.getElementById('recentCampaigns');
+            
+            if (campaigns.length === 0) {
+                container.innerHTML = '<div class="text-gray-500 text-sm">No campaigns yet...</div>';
+                return;
+            }
+
+            container.innerHTML = campaigns.slice(0, 5).map(campaign => `
+                <div class="border rounded p-3 bg-gray-50">
+                    <div class="font-medium text-sm">${campaign.company}</div>
+                    <div class="text-sm text-gray-600 truncate">${campaign.name}</div>
+                    <div class="flex justify-between items-center mt-2">
+                        <span class="px-2 py-1 rounded text-xs ${
+                            campaign.status === 'active' ? 'bg-green-100 text-green-800' :
+                            campaign.status === 'paused' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-gray-100 text-gray-800'
+                        }">
+                            ${campaign.status}
+                        </span>
+                        <span class="text-xs text-gray-500">
+                            Sentiment: ${campaign.metrics?.sentiment_score?.toFixed(2) || 'N/A'}
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateCampaignsTable() {
+            const tbody = document.getElementById('campaignsTableBody');
+            
+            if (campaigns.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                            No campaigns loaded yet...
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = campaigns.map(campaign => `
+                <tr class="border-t hover:bg-gray-50">
+                    <td class="px-4 py-2 font-medium">${campaign.company}</td>
+                    <td class="px-4 py-2 truncate max-w-xs">${campaign.name}</td>
+                    <td class="px-4 py-2">${campaign.platform}</td>
+                    <td class="px-4 py-2">
+                        <span class="px-2 py-1 rounded text-xs ${
+                            campaign.status === 'active' ? 'bg-green-100 text-green-800' :
+                            campaign.status === 'paused' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-gray-100 text-gray-800'
+                        }">
+                            ${campaign.status}
+                        </span>
+                    </td>
+                    <td class="px-4 py-2">
+                        ${campaign.metrics?.impressions?.toLocaleString() || '0'}
+                    </td>
+                    <td class="px-4 py-2">
+                        ${campaign.metrics?.ctr?.toFixed(2) || '0.00'}%
+                    </td>
+                    <td class="px-4 py-2">
+                        <div class="text-sm font-medium ${
+                            (campaign.metrics?.sentiment_score || 0) > 0.7 ? 'text-green-600' :
+                            (campaign.metrics?.sentiment_score || 0) > 0.4 ? 'text-yellow-600' :
+                            'text-red-600'
+                        }">
+                            ${campaign.metrics?.sentiment_score?.toFixed(2) || '0.00'}
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function logEvent(message) {
+            const logContainer = document.getElementById('eventLog');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = 'text-gray-700 mb-1';
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            
+            logContainer.insertBefore(logEntry, logContainer.firstChild);
+            
+            // Keep only latest 50 log entries
+            while (logContainer.children.length > 50) {
+                logContainer.removeChild(logContainer.lastChild);
+            }
+        }
+
+        // Send periodic ping to keep connection alive
+        setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'ping' }));
+            }
+        }, 30000);
+
+        // Auto-connect when page loads
+        window.addEventListener('load', connectWebSocket);
+    </script>
+</body>
+</html>

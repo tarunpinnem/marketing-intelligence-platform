@@ -1,0 +1,220 @@
+version: '3.8'
+
+services:
+  # Kafka Infrastructure
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: competiscan-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - competiscan-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: competiscan-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_METRIC_REPORTERS: io.confluent.metrics.reporter.ConfluentMetricsReporter
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
+      KAFKA_CONFLUENT_METRICS_ENABLE: 'true'
+      KAFKA_CONFLUENT_SUPPORT_CUSTOMER_ID: anonymous
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    networks:
+      - competiscan-network
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: competiscan-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: competiscan-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    networks:
+      - competiscan-network
+
+  # Existing services
+  postgres:
+    image: postgres:15
+    container_name: competiscan-postgres
+    environment:
+      POSTGRES_DB: competiscan
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - competiscan-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    container_name: competiscan-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - competiscan-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: competiscan-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - competiscan-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Enhanced Backend with Kafka
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: competiscan-backend
+    depends_on:
+      - postgres
+      - elasticsearch
+      - redis
+      - kafka
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/competiscan
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - REDIS_URL=redis://redis:6379
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    networks:
+      - competiscan-network
+    restart: unless-stopped
+
+  # Kafka Data Producer
+  kafka-producer:
+    build:
+      context: .
+      dockerfile: services/kafka-producer/Dockerfile
+    container_name: competiscan-kafka-producer
+    depends_on:
+      - kafka
+      - backend
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KAFKA_TOPIC_CAMPAIGNS=campaign-events
+      - KAFKA_TOPIC_ANALYTICS=analytics-events
+    volumes:
+      - ./services/kafka-producer:/app
+    networks:
+      - competiscan-network
+    restart: unless-stopped
+
+  # Kafka Stream Processor
+  kafka-processor:
+    build:
+      context: .
+      dockerfile: services/kafka-processor/Dockerfile
+    container_name: competiscan-kafka-processor
+    depends_on:
+      - kafka
+      - elasticsearch
+      - postgres
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KAFKA_CONSUMER_GROUP=campaign-processor
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/competiscan
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./services/kafka-processor:/app
+    networks:
+      - competiscan-network
+    restart: unless-stopped
+
+  # Real-time Analytics Service
+  analytics-service:
+    build:
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+    container_name: competiscan-analytics
+    depends_on:
+      - kafka
+      - redis
+    ports:
+      - "8002:8002"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - REDIS_URL=redis://redis:6379
+      - WEBSOCKET_PORT=8002
+    volumes:
+      - ./services/analytics-service:/app
+    networks:
+      - competiscan-network
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: competiscan-frontend
+    depends_on:
+      - backend
+      - analytics-service
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_WS_URL=ws://localhost:8002
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - competiscan-network
+
+volumes:
+  postgres_data:
+  elasticsearch_data:
+
+networks:
+  competiscan-network:
+    driver: bridge

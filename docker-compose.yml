@@ -1,0 +1,181 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: competiscan-postgres
+    environment:
+      POSTGRES_DB: competiscan
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Elasticsearch
+  elasticsearch:
+    image: elasticsearch:8.9.0
+    container_name: competiscan-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Zookeeper for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: competiscan-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  # Kafka for Real-time Streaming
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: competiscan-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "19092:19092"
+      - "19093:19093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: EXTERNAL_SAME_HOST://:19093,INTERNAL://:19092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL_SAME_HOST://localhost:19093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL_SAME_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  # Redis for Caching and Session Management
+  redis:
+    image: redis:7-alpine
+    container_name: competiscan-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Data Ingestion Microservice
+  data-ingestion:
+    build: ./services/data-ingestion
+    container_name: competiscan-data-ingestion
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_URL=postgresql://postgres:postgres@postgres:5432/competiscan
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:19092
+      - REDIS_URL=redis://redis:6379
+      - NEWS_API_KEY=deedb115cd3648b8b8bbe8c0933afce5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Analytics Microservice
+  analytics:
+    build: ./services/analytics
+    container_name: competiscan-analytics
+    ports:
+      - "8001:8001"
+    environment:
+      - POSTGRES_URL=postgresql://postgres:postgres@postgres:5432/competiscan
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:19092
+      - REDIS_URL=redis://redis:6379
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # API Gateway
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: competiscan-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - RATE_LIMIT_PER_MINUTE=1000
+    depends_on:
+      - data-ingestion
+      - analytics
+      - websocket
+      - redis
+    restart: unless-stopped
+
+  # WebSocket Service
+  websocket:
+    build: ./services/websocket
+    container_name: competiscan-websocket
+    ports:
+      - "8002:8002"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:19092
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      kafka:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # React Frontend with WebSocket Support
+  frontend:
+    build: ./frontend
+    container_name: competiscan-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8080
+      - REACT_APP_WS_URL=ws://localhost:8002/ws
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - api-gateway
+    stdin_open: true
+    tty: true
+
+volumes:
+  postgres_data:
+  elasticsearch_data:
+  redis_data:
+  kafka_data:
